@@ -1,0 +1,12 @@
+# Python
+*.pyc
+*.pyo
+
+# Vim swap
+*.swp
+
+# Vagrant
+.vagrant
+
+# GeoIP2 database
+geoip/*.mmdb

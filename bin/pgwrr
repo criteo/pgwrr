@@ -1,0 +1,73 @@
+#!/usr/bin/env python
+'''
+Plugin wrapper
+'''
+import argparse   # argument parsing
+import logging    # logging support
+import os         # file timestamp support
+import pgwrr.main # pgwrr main interface
+import sys        # stdin and stdout support
+
+def cli():
+    '''CLI interface'''
+    parser = argparse.ArgumentParser(description='PowerDNS geoip weighted round robin plugin')
+    parser.add_argument('-g', '--geoip', help='Location of GeoIP2 City database', required=True)
+    parser.add_argument('-z', '--zones', help='Location of zones definition', required=True)
+    parser.add_argument('-s', '--sites', help='Location of sites definition', required=True)
+    args = parser.parse_args()
+
+    # Set unbuffered output
+    sys.stdout = os.fdopen(sys.stdout.fileno(), 'w', 0)
+
+    # Set logging
+    logger = logging.getLogger()
+    logger.setLevel(logging.WARNING)
+
+    # Errors are logged via stdout LOG answer
+    err = logging.StreamHandler(sys.stdout)
+    err.setLevel(logging.ERROR)
+    err.setFormatter(logging.Formatter("LOG\t[pgwrr] %(message)s"))
+
+    # Warnings are logged on stderr
+    warn = logging.StreamHandler(sys.stderr)
+    warn.setLevel(logging.WARNING)
+    warn.setFormatter(logging.Formatter("[pgwrr] %(message)s"))
+
+    logger.addHandler(err)
+    logger.addHandler(warn)
+
+    # Load databases
+    geoip = pgwrr.main.geo(args.geoip)
+    geoip_mtime = os.path.getmtime(args.geoip)
+
+    zones = pgwrr.main.conf(args.zones)
+    zones_mtime = os.path.getmtime(args.zones)
+
+    sites = pgwrr.main.conf(args.sites)
+    sites_mtime = os.path.getmtime(args.sites)
+
+    while not pgwrr.main.handshake(sys.stdin.readline()):
+        pass
+
+    while True:
+        pgwrr.main.parse(geoip=geoip,
+                         zones=zones,
+                         sites=sites,
+                         line=sys.stdin.readline())
+
+        # Reload databases if modified
+        if os.path.getmtime(args.geoip) != geoip_mtime:
+            geoip = pgwrr.main.geo(args.geoip)
+            geoip_mtime = os.path.getmtime(args.geoip)
+
+        if os.path.getmtime(args.zones) != zones_mtime:
+            zones = pgwrr.main.conf(args.zones)
+            zones_mtime = os.path.getmtime(args.zones)
+
+        if os.path.getmtime(args.sites) != sites_mtime:
+            sites = pgwrr.main.conf(args.sites)
+            sites_mtime = os.path.getmtime(args.sites)
+
+
+if __name__ == "__main__":
+    cli()
