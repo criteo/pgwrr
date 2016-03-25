@@ -29,6 +29,8 @@ def query(line):
     if line and line[:2] == 'Q\t':
         try:
             (dummy_q, qname, qclass, qtype, qid, rip, lip, edns) = line.strip().split('\t')
+            # Lowercase name query
+            qname = qname.lower()
             # Respond to ANY requests with A
             if qtype == 'ANY':
                 qtype = 'A'
