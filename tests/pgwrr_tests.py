@@ -39,8 +39,15 @@ def test_query():
     assert_raises(ValueError, pgwrr.proto.query, 'Q\t')
     assert_raises(ValueError, pgwrr.proto.query, 'Q\ta\n')
     assert_raises(ValueError, pgwrr.proto.query, 'R\ta\tb\tc\td\te\tf\tg\n')
-    assert_equal(pgwrr.proto.query(
-        'Q\ta\tb\tc\td\te\tf\tg\n'), ('a', 'b', 'c', 'd', 'e', 'f', 'g'))
+    assert_equal(
+        pgwrr.proto.query('Q\tname\tclass\ttype\tid\tip\tip\tedns\n'),
+        ('name', 'class', 'type', 'id', 'ip', 'ip', 'edns')
+    )
+    # test mixed case query
+    assert_equal(
+        pgwrr.proto.query('Q\tnAmE\tclass\ttype\tid\tip\tip\tedns\n'),
+        ('name', 'class', 'type', 'id', 'ip', 'ip', 'edns')
+    )
 
 def test_answer():
     '''Test answers'''
