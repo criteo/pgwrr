@@ -6,7 +6,7 @@ except ImportError:
     from distutils.core import setup
 
 setup(name='pgwrr',
-      version='0.5',
+      version='0.5.1',
       description='PowerDNS GeoIP Weighted Round Robin pipe backend plugin',
       url='https://github.com/criteo/pgwrr',
       author='Robert Veznaver',
