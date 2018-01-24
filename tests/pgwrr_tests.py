@@ -76,7 +76,6 @@ def test_reserved():
     assert_equal(pgwrr.db.reserved('172.16.0.0'), True)
     assert_equal(pgwrr.db.reserved('192.0.0.0'), True)
     assert_equal(pgwrr.db.reserved('192.0.2.0'), True)
-    assert_equal(pgwrr.db.reserved('192.88.99.0'), True)
     assert_equal(pgwrr.db.reserved('192.168.0.0'), True)
     assert_equal(pgwrr.db.reserved('198.18.0.0'), True)
     assert_equal(pgwrr.db.reserved('198.51.100.0'), True)
@@ -96,8 +95,8 @@ def test_zone_lookup():
 
     # FER, University of Zagreb
     assert_equal(pgwrr.db.zone(georeader, zones, '161.53.72.15'), 'eu')
-    # Google
-    assert_equal(pgwrr.db.zone(georeader, zones, '8.8.8.8'), 'sv')
+    # DotCom Monitor
+    assert_equal(pgwrr.db.zone(georeader, zones, '65.49.22.66'), 'sv')
     # IP in US with no region
     assert_equal(pgwrr.db.zone(georeader, zones, '23.23.23.23'), 'ny')
     # Test EDNS
