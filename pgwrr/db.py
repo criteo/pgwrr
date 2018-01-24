@@ -83,8 +83,8 @@ def zone(georeader, zones, remoteip, edns='0.0.0.0/8'):
     else:
         return gzone
 
-def site(sites, qname, qzone, qclass='IN', qtype='A'):
-    '''Site lookup returns (ip, ttl)
+def site(sites, qname, qzone, qclass='IN', qtype='ANY'):
+    '''Site lookup returns [(type, ip, ttl), ...]
 
     The sites variable must be a dict abiding to the following format:
     <fqdn>:
@@ -127,33 +127,43 @@ def site(sites, qname, qzone, qclass='IN', qtype='A'):
             qname = wildcard
         else:
             logging.warning('No such site: %s!', qname)
-            return (None, None)
+            return []
 
-    # Faster than get for nested hashes
     try:
-        mname = sites[qname][qclass][qtype]
+        mclass = sites[qname][qclass]
     except KeyError:
-        logging.warning('No match for: %s %s %s!', qname, qclass, qtype)
-        return (None, None)
+        logging.warning('No match for: %s %s!', qname, qclass)
+        return []
 
-    # Get ttl or default
-    mttl = mname.get('ttl', 3600)
-    # Get content by zone or default
-    mcontent = mname['content'].get(qzone, mname['content']['default'])
-
-    # Weighted round robin algorithm
-    if len(mcontent) > 1:
-        # Create a random integer between 1 the total sum
-        rnd = randint(1, sum(mcontent.values()))
-        upto = 0
-        # Get weighted random address
-        for address in sorted(mcontent):
-            if rnd <= upto + mcontent[address]:
-                return (address, mttl)
-            upto += mcontent[address]
-    # Only one result
+    if qtype == 'ANY':
+        qtypes = sorted(mclass.keys())
+    elif qtype in mclass:
+        qtypes = [qtype]
     else:
-        return (mcontent.keys()[0], mttl)
+        logging.warning('No match for: %s %s %s!', qname, qclass, qtype)
+        return []
+
+    sites = []
+    for qtype in qtypes:
+        mname = mclass[qtype]
+        mttl = mname.get('ttl', 3600)
+        mcontent = mname['content'].get(qzone, mname['content']['default'])
+
+        # Weighted round robin algorithm
+        address = mcontent.keys()[0]
+        if len(mcontent) > 1:
+            # Create a random integer between 1 the total sum
+            rnd = randint(1, sum(mcontent.values()))
+            # Get weighted random address
+            upto = 0
+            for address in sorted(mcontent):
+                if rnd <= upto + mcontent[address]:
+                    break
+                upto += mcontent[address]
+
+        sites.append((qtype, address, mttl))
+
+    return sites
 
 def geoip(filename):
     '''Load MaxMindDB'''
