@@ -18,6 +18,7 @@ setup(name='pgwrr',
       install_requires=[
           'PyYAML >= 3.10',
           'geoip2 >= 2.1.0',
-          'maxminddb >= 1.2.0'
-          ],
+          'ipaddress >= 1.0.19',
+          'maxminddb >= 1.2.0',
+      ],
       zip_safe=False)

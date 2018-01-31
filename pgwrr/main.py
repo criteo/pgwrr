@@ -31,16 +31,16 @@ def parse(geoip, zones, sites, line):
 
     # Zone and site lookup
     qzone = pgwrr.db.zone(geoip, zones, qremote_ip, qedns)
-    rcontent, rttl = pgwrr.db.site(sites, qname, qzone, qclass, qtype)
+    sites = pgwrr.db.site(sites, qname, qzone, qclass, qtype)
 
-    if rcontent and rttl:
-        # Create answer
+    error = False
+    for rtype, rcontent, rttl in sites:
         try:
-            pgwrr.proto.answer(qname, qclass, qtype, rcontent, rttl)
+            pgwrr.proto.answer(qname, qclass, rtype, rcontent, rttl)
         except TypeError:
-            pgwrr.proto.fail()
-            return
+            error = True
+
+    if error:
+        pgwrr.proto.fail()
     else:
-        # No data is an empty END
         pgwrr.proto.end()
-        return

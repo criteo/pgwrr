@@ -1,41 +1,25 @@
 '''
 DNS site lookup
 '''
-import geoip2.database     # C parser by default, fallback to pure Python
-import logging             # for logging
-from random import randint # for weighted round robin
-import socket, struct      # for IP validation
-import yaml                # for configuration loading
+import logging
+from random import randint
+
+import geoip2.database
+import ipaddress
+
+import yaml
 try:
     from yaml import CLoader as Loader # load C parser
 except ImportError:
     from yaml import Loader            # fallback to pure Python
 
 def reserved(address):
-    '''Test for valid IPv4 address and if it is reserved'''
+    '''Test for valid IPv4 or IPv6 address and checks whether it is reserved.'''
     try:
-        test_ip = struct.unpack('!I', socket.inet_pton(socket.AF_INET, address))[0]
-    except socket.error:
+        ip = ipaddress.ip_address(unicode(address))
+        return not ip.is_global or ip.is_multicast
+    except ValueError:
         return True
-
-    subnets = ([0xff000000, 0x00000000], # 0.0.0.0/8       "this" network
-               [0xff000000, 0x0a000000], # 10.0.0.0/8      private
-               [0xffc00000, 0x64400000], # 100.64.0.0/10   private
-               [0xff000000, 0x7f000000], # 127.0.0.0/8     loopback
-               [0xffff0000, 0xa9fe0000], # 169.254.0.0/16  link local
-               [0xfff00000, 0xac100000], # 172.16.0.0/12   private
-               [0xffffff00, 0xc0000000], # 192.0.0.0/24    reserved
-               [0xffffff00, 0xc0000200], # 192.0.2.0/24    test
-               [0xffffff00, 0xc0586300], # 192.88.99.0/24  6to4 anycast
-               [0xffff0000, 0xc0a80000], # 192.168.0.0/16  private
-               [0xfffe0000, 0xc6120000], # 198.18.0.0/15   reserved
-               [0xffffff00, 0xc6336400], # 198.51.100.0/24 test
-               [0xffffff00, 0xcb007100], # 203.0.113.0/24  test
-               [0xe0000000, 0xe0000000]) # 224.0.0.0/3     multicast + future use
-
-    for net in subnets:
-        if test_ip & net[0] == net[1]:
-            return True
 
     return False
 
@@ -99,8 +83,8 @@ def zone(georeader, zones, remoteip, edns='0.0.0.0/8'):
     else:
         return gzone
 
-def site(sites, qname, qzone, qclass='IN', qtype='A'):
-    '''Site lookup returns (ip, ttl)
+def site(sites, qname, qzone, qclass='IN', qtype='ANY'):
+    '''Site lookup returns [(type, ip, ttl), ...]
 
     The sites variable must be a dict abiding to the following format:
     <fqdn>:
@@ -136,42 +120,50 @@ def site(sites, qname, qzone, qclass='IN', qtype='A'):
     '''
 
     # Literal site check
-    if qname in sites:
-        pass
-    else:
+    if qname not in sites:
         # Wildcard site check
         wildcard = '*' + qname[qname.find('.'):]
         if wildcard in sites:
             qname = wildcard
         else:
             logging.warning('No such site: %s!', qname)
-            return (None, None)
+            return []
 
-    # Faster than get for nested hashes
     try:
-        mname = sites[qname][qclass][qtype]
+        mclass = sites[qname][qclass]
     except KeyError:
-        logging.warning('No match for: %s %s %s!', qname, qclass, qtype)
-        return (None, None)
+        logging.warning('No match for: %s %s!', qname, qclass)
+        return []
 
-    # Get ttl or default
-    mttl = mname.get('ttl', 3600)
-    # Get content by zone or default
-    mcontent = mname['content'].get(qzone, mname['content']['default'])
-
-    # Weighted round robin algorithm
-    if len(mcontent) > 1:
-        # Create a random integer between 1 the total sum
-        rnd = randint(1, sum(mcontent.values()))
-        upto = 0
-        # Get weighted random address
-        for address in sorted(mcontent):
-            if rnd <= upto + mcontent[address]:
-                return (address, mttl)
-            upto += mcontent[address]
-    # Only one result
+    if qtype == 'ANY':
+        qtypes = sorted(mclass.keys())
+    elif qtype in mclass:
+        qtypes = [qtype]
     else:
-        return (mcontent.keys()[0], mttl)
+        logging.warning('No match for: %s %s %s!', qname, qclass, qtype)
+        return []
+
+    sites = []
+    for qtype in qtypes:
+        mname = mclass[qtype]
+        mttl = mname.get('ttl', 3600)
+        mcontent = mname['content'].get(qzone, mname['content']['default'])
+
+        # Weighted round robin algorithm
+        address = mcontent.keys()[0]
+        if len(mcontent) > 1:
+            # Create a random integer between 1 the total sum
+            rnd = randint(1, sum(mcontent.values()))
+            # Get weighted random address
+            upto = 0
+            for address in sorted(mcontent):
+                if rnd <= upto + mcontent[address]:
+                    break
+                upto += mcontent[address]
+
+        sites.append((qtype, address, mttl))
+
+    return sites
 
 def geoip(filename):
     '''Load MaxMindDB'''

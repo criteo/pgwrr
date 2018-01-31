@@ -55,11 +55,11 @@ def test_answer():
         assert_equal(pgwrr.proto.answer(qname='name', qclass='IN', qtype='A',
                                         qcontent='10.0.0.1', qttl='60',
                                         qid='1'), None)
-        assert_equal(output.getvalue(), 'DATA\t0\t1\tname\tIN\tA\t60\t1\t10.0.0.1\nEND\n')
+        assert_equal(output.getvalue(), 'DATA\t0\t1\tname\tIN\tA\t60\t1\t10.0.0.1\n')
         output.truncate(0) # Truncate output buffer
 
         assert_equal(pgwrr.proto.answer('localhost', 'IN', 'A', '127.0.0.1'), None)
-        assert_equal(output.getvalue(), 'DATA\t0\t1\tlocalhost\tIN\tA\t3600\t-1\t127.0.0.1\nEND\n')
+        assert_equal(output.getvalue(), 'DATA\t0\t1\tlocalhost\tIN\tA\t3600\t-1\t127.0.0.1\n')
         output.truncate(0) # Truncate output buffer
 
         assert_raises(TypeError, pgwrr.proto.answer, '', 'IN', 'A', '127.0.0.1')
@@ -76,7 +76,6 @@ def test_reserved():
     assert_equal(pgwrr.db.reserved('172.16.0.0'), True)
     assert_equal(pgwrr.db.reserved('192.0.0.0'), True)
     assert_equal(pgwrr.db.reserved('192.0.2.0'), True)
-    assert_equal(pgwrr.db.reserved('192.88.99.0'), True)
     assert_equal(pgwrr.db.reserved('192.168.0.0'), True)
     assert_equal(pgwrr.db.reserved('198.18.0.0'), True)
     assert_equal(pgwrr.db.reserved('198.51.100.0'), True)
@@ -96,8 +95,8 @@ def test_zone_lookup():
 
     # FER, University of Zagreb
     assert_equal(pgwrr.db.zone(georeader, zones, '161.53.72.15'), 'eu')
-    # Google
-    assert_equal(pgwrr.db.zone(georeader, zones, '8.8.8.8'), 'sv')
+    # DotCom Monitor
+    assert_equal(pgwrr.db.zone(georeader, zones, '65.49.22.66'), 'sv')
     # IP in US with no region
     assert_equal(pgwrr.db.zone(georeader, zones, '23.23.23.23'), 'ny')
     # Test EDNS
@@ -114,7 +113,14 @@ def test_site_lookup():
                         'default': {'0.0.0.1': 100},
                         'eu':      {'0.0.0.2': 100}
                         }
-                    }
+                    },
+                'AAAA': {
+                    'ttl': 300,
+                    'content': {
+                        'default': {'2001:db8::1': 100},
+                        'eu':      {'2001:db8::2': 100}
+                        }
+                    },
                 }
             },
         '*.example.com': {
@@ -143,26 +149,44 @@ def test_site_lookup():
                 }
             }
         }
-    assert_equal(pgwrr.db.site(sites, 'www.nonexistant.com', 'nonexistant'), (None, None))
 
-    assert_equal(pgwrr.db.site(sites, 'www.example.com', 'nonexistant', 'CH', 'A'), (None, None))
-    assert_equal(pgwrr.db.site(sites, 'www.example.com', 'nonexistant', 'IN', 'MX'), (None, None))
-    assert_equal(pgwrr.db.site(sites, 'www.example.com', 'nonexistant'), ('0.0.0.1', 300))
-    assert_equal(pgwrr.db.site(sites, 'www.example.com', 'eu'), ('0.0.0.2', 300))
+    assert_equal(pgwrr.db.site(sites, 'www.nonexistant.com', 'nonexistant'), [])
+    assert_equal(pgwrr.db.site(sites, 'www.example.com', 'nonexistant', 'CH', 'A'), [])
+    assert_equal(pgwrr.db.site(sites, 'www.example.com', 'nonexistant', 'IN', 'MX'), [])
 
-    assert_equal(pgwrr.db.site(sites, 'test.example.com', 'nonexistant'), ('0.0.0.3', 3600))
-    assert_equal(pgwrr.db.site(sites, 'test.example.com', 'eu'), ('0.0.0.4', 3600))
+    assert_equal(pgwrr.db.site(sites, 'www.example.com', 'nonexistant'), [
+        ('A', '0.0.0.1', 300),
+        ('AAAA', '2001:db8::1', 300),
+    ])
+    assert_equal(pgwrr.db.site(sites, 'www.example.com', 'eu'), [
+        ('A', '0.0.0.2', 300),
+        ('AAAA', '2001:db8::2', 300),
+    ])
+    assert_equal(pgwrr.db.site(sites, 'test.example.com', 'nonexistant'), [
+        ('A', '0.0.0.3', 3600),
+    ])
+    assert_equal(pgwrr.db.site(sites, 'test.example.com', 'eu'), [
+        ('A', '0.0.0.4', 3600),
+    ])
 
-    assert_in(pgwrr.db.site(sites, 'www.wrr.com', 'ap'), (('0.0.0.1', 300), ('0.0.0.2', 300)))
-    assert_in(pgwrr.db.site(sites, 'www.wrr.com', 'eu'), (
-        ('0.0.0.1', 300), ('0.0.0.2', 300), ('0.0.0.3', 300), ('0.0.0.4', 300)))
+    assert_in(pgwrr.db.site(sites, 'www.wrr.com', 'ap'), [
+        [('A', '0.0.0.1', 300)],
+        [('A', '0.0.0.2', 300)],
+    ])
+    assert_in(pgwrr.db.site(sites, 'www.wrr.com', 'eu'), [
+        [('A', '0.0.0.1', 300)],
+        [('A', '0.0.0.2', 300)],
+        [('A', '0.0.0.3', 300)],
+        [('A', '0.0.0.4', 300)],
+    ])
 
 def test_main():
     '''Test main entry point'''
 
     geoip = geoip2.database.Reader('geoip/GeoLite2-City.mmdb')
     zones = {'default': 'as',
-             'HR': 'eu'}
+             'HR': 'eu',
+             'DE': 'eu'}
     sites = {
         'www.example.com': {
             'IN': {
@@ -172,7 +196,14 @@ def test_main():
                         'default': {'0.0.0.1': 100},
                         'eu':      {'0.0.0.2': 100}
                         }
-                    }
+                    },
+                'AAAA': {
+                    'ttl': 300,
+                    'content': {
+                        'default': {'2001:db8::1': 100},
+                        'eu':      {'2001:db8::2': 100}
+                        }
+                    },
                 }
             }
         }
@@ -195,6 +226,38 @@ def test_main():
         assert_equal(output.getvalue(),
                      'DATA\t0\t1\twww.example.com\tIN\tA\t300\t-1\t0.0.0.2\nEND\n')
         output.truncate(0) # Truncate output buffer
+
+        assert_equal(pgwrr.main.parse(
+            geoip, zones, sites,
+            'Q\twww.example.com\tIN\tAAAA\t1\t::1\t::1\t::1'), None)
+        assert_equal(output.getvalue(),
+                     'DATA\t0\t1\twww.example.com\tIN\tAAAA\t300\t-1\t2001:db8::1\nEND\n')
+        output.truncate(0)
+
+        assert_equal(pgwrr.main.parse(
+            geoip, zones, sites,
+            'Q\twww.example.com\tIN\tAAAA\t1\t::1\t::1\t2a01:4f8:200:5123::1'), None)
+        assert_equal(output.getvalue(),
+                     'DATA\t0\t1\twww.example.com\tIN\tAAAA\t300\t-1\t2001:db8::2\nEND\n')
+        output.truncate(0)
+
+        assert_equal(pgwrr.main.parse(
+            geoip, zones, sites,
+            'Q\twww.example.com\tIN\tANY\t1\t::1\t::1\t::1'), None)
+        assert_equal(output.getvalue(),
+                     'DATA\t0\t1\twww.example.com\tIN\tA\t300\t-1\t0.0.0.1\n'
+                     'DATA\t0\t1\twww.example.com\tIN\tAAAA\t300\t-1\t2001:db8::1\n'
+                     'END\n')
+        output.truncate(0)
+
+        assert_equal(pgwrr.main.parse(
+            geoip, zones, sites,
+            'Q\twww.example.com\tIN\tANY\t1\t::1\t::1\t2a01:4f8:200:5123::1'), None)
+        assert_equal(output.getvalue(),
+                     'DATA\t0\t1\twww.example.com\tIN\tA\t300\t-1\t0.0.0.2\n'
+                     'DATA\t0\t1\twww.example.com\tIN\tAAAA\t300\t-1\t2001:db8::2\n'
+                     'END\n')
+        output.truncate(0)
 
         assert_equal(pgwrr.main.parse(
             geoip, zones, sites,

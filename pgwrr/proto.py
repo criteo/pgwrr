@@ -28,12 +28,8 @@ def query(line):
     '''Query format unpacking'''
     if line and line[:2] == 'Q\t':
         try:
-            (dummy_q, qname, qclass, qtype, qid, rip, lip, edns) = line.strip().split('\t')
-            # Lowercase name query
+            dummy_q, qname, qclass, qtype, qid, rip, lip, edns = line.strip().split('\t')
             qname = qname.lower()
-            # Respond to ANY requests with A
-            if qtype == 'ANY':
-                qtype = 'A'
             return (qname, qclass, qtype, qid, rip, lip, edns)
         except ValueError:
             logging.error('Cannot unpack query!')
@@ -55,7 +51,6 @@ def answer(qname, qclass, qtype, qcontent, qttl='3600', qid='-1', qscopebits='0'
         # Set scopebits to 0 and auth to 1 (default values)
         sys.stdout.write('DATA\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' %
                          (qscopebits, qauth, qname, qclass, qtype, qttl, qid, qcontent))
-        end()
     else:
         logging.error('Bad answer or no data!')
         raise TypeError

@@ -60,7 +60,7 @@ For best performance it is highly recommended to specify a zone for every single
 It would be best if this plugin is used only when needed, as in only for domain names that you actually _can_ load balance. This is easy to set up in PowerDNS with:
 ```
 launch=pipe,bind
-pipe-regex=^filter_regex;(A|ANY)$
+pipe-regex=^filter_regex;(A|AAAA|ANY)$
 pipe-command=/usr/bin/pgwrr -g geoip2.mmdb -z zones.yml -s sites.yml
 ```
 The above configuration will use the pipe backend only if it passes the pipe-regex. In all other cases it will use the bind backend.
